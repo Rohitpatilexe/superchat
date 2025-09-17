@@ -1,0 +1,14 @@
+# Folders and files created by Visual Studio
+.vs/
+bin/
+obj/
+*.user
+*.suo
+*.sln.ide*
+
+# Project files that should not be committed
+*.csproj.user
+*.resharper
+
+# Package directories
+node_modules/
