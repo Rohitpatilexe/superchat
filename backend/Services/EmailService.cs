@@ -17,7 +17,7 @@ namespace backend.Services
         {
             var apiKey = _emailConfig.SendGridApiKey;
             var client = new SendGridClient(apiKey);
-            var from = new EmailAddress("hussainsakib44@gmail,com", "Superchat");
+            var from = new EmailAddress("conshus@partner.waters.com", "Superchat");
             var to = new EmailAddress(vendorEmail);
             var subject = "You're Invited to Join Our Vendor Platform";
             

@@ -1,6 +1,7 @@
 using DotNetEnv;
 using backend.Config;
 using backend.Services;
+using Amazon;
 using Amazon.S3;
 using Amazon.Runtime;
 using Microsoft.EntityFrameworkCore;
@@ -44,8 +45,7 @@ var awsCredentials = new BasicAWSCredentials(
 );
 var awsConfig = new AmazonS3Config
 {
-    ServiceURL = Environment.GetEnvironmentVariable("S3_ENDPOINT"),
-    ForcePathStyle = true // Important for S3-compatible services like MinIO
+    RegionEndpoint = RegionEndpoint.GetBySystemName(Environment.GetEnvironmentVariable("AWS_REGION"))
 };
 builder.Services.AddSingleton<IAmazonS3>(new AmazonS3Client(awsCredentials, awsConfig));
 

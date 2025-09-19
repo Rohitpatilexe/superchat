@@ -32,6 +32,6 @@ dotnet ef database update
 # get into shell
 docker exec -it mssql_server /bin/bash
 # connect to sql server
-/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'YourStrong@Password123'
+/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'YourStrong@Password123' -C
 # run sql queries
 ```
