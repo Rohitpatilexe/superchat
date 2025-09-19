@@ -1,0 +1,22 @@
+# Visual Studio / C#
+[bB]in/
+[oO]bj/
+*.suo
+*.user
+*.log
+*.vspscc
+*.vssscc
+*.vspscc
+*.vssscc
+*.bak
+*.pyc
+*.class
+
+# NuGet
+.nuget/
+
+# Mac/OSX
+.DS_Store
+
+# Windows
+Thumbs.db
