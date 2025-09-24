@@ -7,7 +7,7 @@ using backend.DTOs;
 namespace backend.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")] // Sets the base route for all endpoints here to /api/vendor.
+    [Route("api/[controller]")]
     [Authorize(Roles = "Vendor")]
     public class VendorController : ControllerBase
     {
@@ -21,16 +21,13 @@ namespace backend.Controllers
         [HttpGet("employees")]
         public async Task<IActionResult> GetEmployees()
         {
-            // Get the authenticated user's ID from their JWT claims. This is a secure way to identify the user.
             var vendorUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
             var employees = await _vendorService.GetEmployeesAsync(vendorUserId);
-            // Return the list of employees with a 200 OK status.
             return Ok(employees);
         }
 
         // Defines the endpoint at POST /api/vendor/employees
-        // [FromForm] is crucial here. It tells the API to expect 'multipart/form-data',
-        // which is the format used for requests that include files.
+        // Updated to include JobId from the DTO.
         [HttpPost("employees")]
         public async Task<IActionResult> CreateEmployee([FromForm] CreateEmployeeDto dto)
         {
@@ -40,8 +37,6 @@ namespace backend.Controllers
             {
                 return BadRequest("Could not create employee.");
             }
-            // Return a 201 Created response, which is the standard for successful resource creation.
-            // It includes a URL to the newly created employee and the employee object itself.
             return CreatedAtAction(nameof(GetEmployeeById), new { id = employee.Id }, employee);
         }
         
@@ -51,7 +46,6 @@ namespace backend.Controllers
         {
             var vendorUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
             var employee = await _vendorService.GetEmployeeByIdAsync(id, vendorUserId);
-            // If the service returns null, it means the employee was not found or doesn't belong to this vendor.
             if (employee == null) return NotFound();
             return Ok(employee);
         }
@@ -73,8 +67,17 @@ namespace backend.Controllers
             var vendorUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
             var success = await _vendorService.DeleteEmployeeAsync(id, vendorUserId);
             if (!success) return NotFound();
-            // Return a 204 No Content response, which is standard for successful deletions.
             return NoContent();
+        }
+
+        // New endpoint to get the jobs assigned to the current vendor.
+        // GET /api/vendor/jobs
+        [HttpGet("jobs")]
+        public async Task<IActionResult> GetAssignedJobs()
+        {
+            var vendorUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier));
+            var jobs = await _vendorService.GetAssignedJobsAsync(vendorUserId);
+            return Ok(jobs);
         }
     }
 }
