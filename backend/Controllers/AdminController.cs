@@ -6,9 +6,9 @@ using backend.DTOs;
 
 namespace backend.Controllers
 {
-    [ApiController] // Enables standard API behaviors.
-    [Route("api/[controller]")] // Sets the base route to /api/admin.
-    [Authorize(Roles = "Admin")] // Secures ALL endpoints in this controller, allowing access only to users with the "Admin" role.
+    [ApiController]
+    [Route("api/[controller]")]
+    [Authorize(Roles = "Admin")]
     public class AdminController : ControllerBase
     {
         private readonly AdminService _adminService;
@@ -17,7 +17,7 @@ namespace backend.Controllers
             _adminService = adminService;
         }
 
-        // creating a new vendor.
+        // Creating a new vendor with the new 'Country' field.
         // POST /api/admin/vendors
         [HttpPost("vendors")]
         public async Task<IActionResult> CreateVendor([FromBody] CreateVendorRequest request)
@@ -25,15 +25,13 @@ namespace backend.Controllers
             var adminIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(adminIdString) || !int.TryParse(adminIdString, out var adminId))
             {
-                // If the ID is missing or not a valid integer, the token is invalid.
                 return Unauthorized("Invalid user token.");
             }
-            var vendor = await _adminService.CreateVendorAsync(request.CompanyName, request.ContactEmail, adminId);
-            // Return a 201 Created response. This is a RESTful best practice.
-            // It includes a "Location" header pointing to the new resource's URL and the new vendor object in the body.
+            // Updated to pass the 'Country' field to the service.
+            var vendor = await _adminService.CreateVendorAsync(request.CompanyName, request.ContactEmail, request.Country, adminId);
             return CreatedAtAction(nameof(GetVendorById), new { id = vendor.Id }, vendor);
         }
-        
+
         // For an admin to approve a vendor.
         // PUT /api/admin/vendors/{id}/approve
         [HttpPut("vendors/{id}/approve")]
@@ -59,7 +57,6 @@ namespace backend.Controllers
         [HttpGet("vendors")]
         public async Task<IActionResult> GetAllVendors()
         {
-            // The result from the service is wrapped in a 200 OK response.
             return Ok(await _adminService.GetAllVendorsAsync());
         }
 
@@ -69,7 +66,6 @@ namespace backend.Controllers
         public async Task<IActionResult> GetVendorById(int id)
         {
             var vendor = await _adminService.GetVendorByIdAsync(id);
-            // If the vendor is not found, return a 404 Not Found response.
             if (vendor == null) return NotFound();
             return Ok(vendor);
         }
@@ -81,8 +77,39 @@ namespace backend.Controllers
         {
             var success = await _adminService.DeleteVendorAsync(id);
             if (!success) return NotFound();
-            // Return a 204 No Content response, which is standard for a successful deletion with no body.
             return NoContent();
+        }
+
+        // New endpoint to get all jobs.
+        // GET /api/admin/jobs
+        [HttpGet("jobs")]
+        public async Task<IActionResult> GetAllJobs()
+        {
+            return Ok(await _adminService.GetAllJobsAsync());
+        }
+
+        // New endpoint to create a job.
+        // POST /api/admin/jobs
+        [HttpPost("jobs")]
+        public async Task<IActionResult> CreateJob([FromBody] CreateJobRequest request)
+        {
+            var adminIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(adminIdString) || !int.TryParse(adminIdString, out var adminId))
+            {
+                return Unauthorized("Invalid user token.");
+            }
+            var job = await _adminService.CreateJobAsync(request, adminId);
+            return CreatedAtAction(nameof(GetJobById), new { id = job.Id }, job);
+        }
+
+        // New endpoint to get a job by ID.
+        // GET /api/admin/jobs/{id}
+        [HttpGet("jobs/{id}")]
+        public async Task<IActionResult> GetJobById(int id)
+        {
+            var job = await _adminService.GetJobByIdAsync(id);
+            if (job == null) return NotFound();
+            return Ok(job);
         }
     }
 }
