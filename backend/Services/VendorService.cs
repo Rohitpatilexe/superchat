@@ -9,11 +9,9 @@ namespace backend.Services
 {
     public class VendorService
     {
-        // Private fields to hold the injected dependencies.
         private readonly ApplicationDbContext _context;
         private readonly IAmazonS3 _s3Client;
 
-        // The constructor uses Dependency Injection to receive the database context and S3 client.
         public VendorService(ApplicationDbContext context, IAmazonS3 s3Client)
         {
             _context = context;
@@ -23,12 +21,9 @@ namespace backend.Services
         // Retrieves all employees that belong to the currently logged-in vendor.
         public async Task<IEnumerable<EmployeeDto>> GetEmployeesAsync(int vendorUserId)
         {
-            // First, find the Vendor record associated with the logged-in user's ID.
             var vendor = await _context.Vendors.FirstOrDefaultAsync(v => v.UserId == vendorUserId);
-            // If for some reason the user isn't linked to a vendor, return an empty list.
             if (vendor == null) return new List<EmployeeDto>();
 
-            // Return all employees whose VendorId matches the found vendor's ID.
             return await _context.Employees
                 .Where(e => e.VendorId == vendor.Id)
                 .Select(e => new EmployeeDto(e.Id, e.FirstName, e.LastName, e.JobTitle))
@@ -41,8 +36,6 @@ namespace backend.Services
             var vendor = await _context.Vendors.FirstOrDefaultAsync(v => v.UserId == vendorUserId);
             if (vendor == null) return null;
 
-            // This query is crucial for security: it checks both the employee's ID AND that their
-            // VendorId matches the logged-in vendor's ID. This prevents one vendor from accessing another's employees.
             return await _context.Employees
                 .Where(e => e.Id == employeeId && e.VendorId == vendor.Id)
                 .Select(e => new EmployeeDto(e.Id, e.FirstName, e.LastName, e.JobTitle))
@@ -50,40 +43,46 @@ namespace backend.Services
         }
 
         // Creates a new employee and uploads their resume to S3 if provided.
+        // Updated to accept JobId.
         public async Task<EmployeeDto?> CreateEmployeeAsync(CreateEmployeeDto dto, int vendorUserId)
         {
             var vendor = await _context.Vendors.FirstOrDefaultAsync(v => v.UserId == vendorUserId);
             if (vendor == null) return null;
 
+            // Optional: Validate that the job exists and is assigned to this vendor.
+            var jobAssignment = await _context.JobVendors
+                .FirstOrDefaultAsync(jv => jv.JobId == dto.JobId && jv.VendorId == vendor.Id);
+
+            if (jobAssignment == null)
+            {
+                // This vendor is not assigned to this job.
+                return null;
+            }
+
             string? resumeS3Key = null;
-            // Check if a resume file was included in the request.
             if (dto.ResumeFile != null)
             {
-                // Generate a unique key (file path) for the S3 object to prevent name collisions.
-                // A good practice is to include IDs in the path.
                 resumeS3Key = $"resumes/vendor-{vendor.Id}/{Guid.NewGuid()}-{dto.ResumeFile.FileName}";
                 
-                // Prepare the upload request for the AWS SDK.
                 var putRequest = new PutObjectRequest
                 {
                     BucketName = Environment.GetEnvironmentVariable("S3_BUCKET"),
                     Key = resumeS3Key,
-                    InputStream = dto.ResumeFile.OpenReadStream(), // The actual file content.
+                    InputStream = dto.ResumeFile.OpenReadStream(),
                     ContentType = dto.ResumeFile.ContentType
                 };
 
-                // Asynchronously upload the file to S3.
                 await _s3Client.PutObjectAsync(putRequest);
             }
 
-            // Create the new Employee entity in memory.
             var employee = new Employee
             {
                 FirstName = dto.FirstName,
                 LastName = dto.LastName,
                 JobTitle = dto.JobTitle,
-                ResumeS3Key = resumeS3Key, // Store the S3 key, not the file itself.
+                ResumeS3Key = resumeS3Key,
                 VendorId = vendor.Id,
+                JobId = dto.JobId, // Added the JobId here
                 CreatedByUserId = vendorUserId,
                 CreatedAt = DateTime.UtcNow
             };
@@ -99,23 +98,18 @@ namespace backend.Services
             var vendor = await _context.Vendors.FirstOrDefaultAsync(v => v.UserId == vendorUserId);
             if (vendor == null) return null;
 
-            // Find the specific employee, ensuring they belong to the correct vendor.
             var employee = await _context.Employees.FirstOrDefaultAsync(e => e.Id == employeeId && e.VendorId == vendor.Id);
             if (employee == null) return null;
 
-            // Update the employee's properties with the new values from the DTO.
             employee.FirstName = dto.FirstName;
             employee.LastName = dto.LastName;
             employee.JobTitle = dto.JobTitle;
             employee.UpdatedAt = DateTime.UtcNow;
             employee.UpdatedByUserId = vendorUserId;
+            // No logic for updating resume is provided, as per the old code's comment.
 
-            // Commit the changes to the database.
             await _context.SaveChangesAsync();
             return new EmployeeDto(employee.Id, employee.FirstName, employee.LastName, employee.JobTitle);
-
-            // will add later
-            // support for updating the resume
         }
 
         // Deletes an employee record.
@@ -127,15 +121,23 @@ namespace backend.Services
             var employee = await _context.Employees.FirstOrDefaultAsync(e => e.Id == employeeId && e.VendorId == vendor.Id);
             if (employee == null) return false;
 
-            // Mark the employee for deletion.
             _context.Employees.Remove(employee);
             await _context.SaveChangesAsync();
 
-            // This only deletes the database record. For a complete cleanup, you could
-            // add logic here to also delete the associated resume file from the S3 bucket
-            // using the employee.ResumeS3Key.
-
             return true;
+        }
+
+        // New method to get all jobs assigned to the current vendor.
+        public async Task<IEnumerable<JobDto>> GetAssignedJobsAsync(int vendorUserId)
+        {
+            var vendor = await _context.Vendors.FirstOrDefaultAsync(v => v.UserId == vendorUserId);
+            if (vendor == null) return new List<JobDto>();
+
+            // Eager load the JobAssignments and then the related Job for the current vendor.
+            return await _context.JobVendors
+                .Where(jv => jv.VendorId == vendor.Id)
+                .Select(jv => new JobDto(jv.Job.Id, jv.Job.Title, jv.Job.Country, jv.Job.CreatedAt, jv.Job.ExpiryDate, jv.Job.IsActive))
+                .ToListAsync();
         }
     }
 }
