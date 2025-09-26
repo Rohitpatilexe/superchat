@@ -33,10 +33,11 @@ namespace backend.Controllers
         public async Task<IActionResult> CreateEmployee([FromForm] CreateEmployeeDto dto)
         {
             var vendorPublicId = GetVendorPublicId();
+            // FIX: Calling the corrected CreateEmployeeAsync method
             var employee = await _vendorService.CreateEmployeeAsync(dto, vendorPublicId);
             if (employee == null)
             {
-                return BadRequest("Could not create employee.");
+                return BadRequest("Could not create employee. Check if job exists and is assigned to you.");
             }
             return CreatedAtAction(nameof(GetEmployeeById), new { id = employee.Id }, employee);
         }
@@ -46,6 +47,7 @@ namespace backend.Controllers
         public async Task<IActionResult> GetEmployeeById(int id)
         {
             var vendorPublicId = GetVendorPublicId();
+            // FIX: Calling the corrected GetEmployeeByIdAsync method
             var employee = await _vendorService.GetEmployeeByIdAsync(id, vendorPublicId);
             if (employee == null) return NotFound();
             return Ok(employee);
@@ -65,8 +67,11 @@ namespace backend.Controllers
         public async Task<IActionResult> GetEmployeesForJob(int jobId)
         {
             var vendorPublicId = GetVendorPublicId();
+            // FIX: Calling the corrected GetEmployeesForJobAsync method
             var employees = await _vendorService.GetEmployeesForJobAsync(jobId, vendorPublicId);
             return Ok(employees);
         }
+
+        // NOTE: Other Employee CRUD methods (Update and Delete) would also need to be placed here.
     }
 }
