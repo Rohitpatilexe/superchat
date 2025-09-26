@@ -1,3 +1,5 @@
+// backend/Services/VendorService.cs
+
 using Amazon.S3;
 using Amazon.S3.Model;
 using backend.Config;
@@ -65,7 +67,7 @@ namespace backend.Services
                 JobTitle = dto.JobTitle,
                 ResumeS3Key = resumeS3Key,
                 VendorId = vendor.Id,
-                JobId = dto.JobId, // New: Assign the employee to the specific job.
+                JobId = dto.JobId, // Assign the employee to the specific job.
                 CreatedByUserId = vendor.UserId ?? 0,
                 CreatedAt = DateTime.UtcNow
             };
@@ -93,10 +95,18 @@ namespace backend.Services
             var vendor = await _context.Vendors.FirstOrDefaultAsync(v => v.PublicId == vendorPublicId);
             if (vendor == null) return new List<JobDto>();
 
-            // Query the join table to find all jobs assigned to this vendor.
+            // FIX: Must include the DaysRemaining calculation (6th argument) for JobDto.
             return await _context.JobVendors
                 .Where(jv => jv.VendorId == vendor.Id)
-                .Select(jv => new JobDto(jv.Job.Id, jv.Job.Title, jv.Job.Description, jv.Job.CreatedAt, jv.Job.ExpiryDate))
+                .Select(jv => new JobDto(
+                    jv.Job.Id,
+                    jv.Job.Title,
+                    jv.Job.Description,
+                    jv.Job.CreatedAt,
+                    jv.Job.ExpiryDate,
+                    // The missing 6th argument: Calculate time remaining
+                    (jv.Job.ExpiryDate - DateTime.UtcNow).TotalDays
+                ))
                 .ToListAsync();
         }
 

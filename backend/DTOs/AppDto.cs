@@ -1,5 +1,8 @@
+// backend/DTOs/AppDtos.cs
+
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http;
+using System.Collections.Generic;
 
 namespace backend.DTOs
 {
@@ -38,6 +41,18 @@ namespace backend.DTOs
         List<EmployeeDto> Employees
     );
     public record SearchResultDto(string Type, List<object> Results);
+
+    // Updated Job DTO to include DaysRemaining for notification/display (Requirement 4)
+    // From All.cs
+    public record JobDto(
+        int Id,
+        string Title,
+        string Description,
+        DateTime CreatedAt,
+        DateTime ExpiryDate,
+        double DaysRemaining // Must be 6th property
+    );
+
     public record CreateJobDto(
         [Required] string Title,
         [Required] string Description,
@@ -45,7 +60,6 @@ namespace backend.DTOs
         [Required] DateTime ExpiryDate,
         [Required] List<int> VendorIds
     );
-    public record JobDto(int Id, string Title, string Description, DateTime CreatedAt, DateTime ExpiryDate);
 
     // --- Vendor DTOs ---
     public class CreateEmployeeDto
@@ -54,8 +68,7 @@ namespace backend.DTOs
         [Required] public string LastName { get; set; } = string.Empty;
         public string? JobTitle { get; set; }
         public IFormFile? ResumeFile { get; set; }
-        // The JobId is now required for creating an employee.
-        [Required] public int JobId { get; set; }
+        [Required] public int JobId { get; set; } // Required for employee-to-job mapping
     }
     public record UpdateEmployeeDto(string FirstName, string LastName, string? JobTitle);
     public record EmployeeDto(int Id, string FirstName, string LastName, string? JobTitle);

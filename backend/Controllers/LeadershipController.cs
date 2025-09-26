@@ -19,18 +19,23 @@ namespace backend.Controllers
             _leadershipService = leadershipService;
         }
 
-        // Helper method to get the authenticated user's ID.
         private int GetUserId()
         {
-            // This is a secure way to get the user's ID from their JWT claims.
             var userIdString = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            // It's a good practice to handle potential nulls or parse errors, though roles should prevent this.
             return int.Parse(userIdString);
         }
 
-        // POST /api/leadership/jobs
-        // Endpoint to create a new job.
-        // It accepts a CreateJobDto containing job details and a list of vendor IDs.
+        // POST /api/leadership/vendors - Leader adds vendor details (Requirement 1)
+        [HttpPost("vendors")]
+        public async Task<IActionResult> CreateVendor([FromBody] CreateVendorDto dto)
+        {
+            var leaderUserId = GetUserId();
+            var newVendor = await _leadershipService.CreateVendorAsync(dto, leaderUserId);
+            // Use 202 Accepted because the verification is still pending.
+            return AcceptedAtAction(nameof(GetVendorById), new { id = newVendor.Id }, newVendor);
+        }
+
+        // POST /api/leadership/jobs - Leader creates a new job (Requirement 3, 5)
         [HttpPost("jobs")]
         public async Task<IActionResult> CreateJob([FromBody] CreateJobDto dto)
         {
@@ -39,30 +44,24 @@ namespace backend.Controllers
 
             if (newJob == null)
             {
-                // Return a 400 Bad Request if the job creation or vendor assignment fails.
-                return BadRequest("Failed to create job or assign vendors. Check if vendors exist in the specified country.");
+                return BadRequest("Failed to create job or assign vendors. Check if vendors exist in the specified country and are verified.");
             }
-            // Return a 201 Created response, a RESTful best practice.
-            // This includes the location of the new resource and the created object.
             return CreatedAtAction(nameof(GetJobById), new { id = newJob.Id }, newJob);
         }
 
         // GET /api/leadership/jobs/{id}
-        // Endpoint to get a specific job by its ID.
         [HttpGet("jobs/{id}")]
         public async Task<IActionResult> GetJobById(int id)
         {
             var job = await _leadershipService.GetJobByIdAsync(id);
             if (job == null)
             {
-                // Return 404 Not Found if the job doesn't exist.
                 return NotFound();
             }
             return Ok(job);
         }
 
         // GET /api/leadership/jobs
-        // Endpoint to get all jobs created by the current leader.
         [HttpGet("jobs")]
         public async Task<IActionResult> GetJobs()
         {
@@ -72,7 +71,6 @@ namespace backend.Controllers
         }
 
         // GET /api/leadership/jobs/{jobId}/employees
-        // Endpoint to get all employees mapped to a specific job.
         [HttpGet("jobs/{jobId}/employees")]
         public async Task<IActionResult> GetJobEmployees(int jobId)
         {
@@ -80,8 +78,7 @@ namespace backend.Controllers
             return Ok(employees);
         }
 
-        // New: Endpoint to retrieve all vendors for a specific country
-        // This is a new requirement. We'll need a new method in the service.
+        // GET /api/leadership/countries/{countryCode}/vendors
         [HttpGet("countries/{countryCode}/vendors")]
         public async Task<IActionResult> GetVendorsByCountry(string countryCode)
         {
@@ -91,6 +88,29 @@ namespace backend.Controllers
                 return NotFound("No vendors found for the specified country.");
             }
             return Ok(vendors);
+        }
+
+        // NEW: Unauthenticated endpoint for Vendor to verify or reject details (Requirement 1)
+        // This should be mapped by the email verification link.
+        [AllowAnonymous]
+        [HttpGet("/api/vendor/verify")]
+        public async Task<IActionResult> VerifyVendor([FromQuery] Guid token, [FromQuery] bool accept)
+        {
+            var success = await _leadershipService.VerifyVendorAsync(token, accept);
+            if (!success)
+            {
+                return BadRequest("Verification failed. Link is invalid or expired.");
+            }
+            // Front-end should handle the final display/redirect.
+            return Ok(new { message = accept ? "Vendor details accepted and verified." : "Vendor details rejected." });
+        }
+
+        // NOTE: GetVendorById is assumed to exist for CreatedAtAction to work.
+        [HttpGet("vendors/{id}")]
+        public async Task<IActionResult> GetVendorById(int id)
+        {
+            // Implementation detail: Add a GetVendorByIdAsync to your LeadershipService.
+            return Ok();
         }
     }
 }

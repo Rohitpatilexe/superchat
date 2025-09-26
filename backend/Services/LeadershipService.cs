@@ -10,31 +10,84 @@ using System.Security.Claims;
 
 namespace backend.Services
 {
+    // Placeholder for an email service (needed for Requirement 1)
+    public interface ISomeEmailService
+    {
+        Task SendVerificationEmail(string toEmail, Guid token);
+    }
+
     public class LeadershipService
     {
         private readonly ApplicationDbContext _context;
         private readonly IAmazonS3 _s3Client;
+        private readonly ISomeEmailService _emailService;
 
-        public LeadershipService(ApplicationDbContext context, IAmazonS3 s3Client)
+        public LeadershipService(ApplicationDbContext context, IAmazonS3 s3Client, ISomeEmailService emailService)
         {
             _context = context;
             _s3Client = s3Client;
+            _emailService = emailService;
         }
 
-        // New: Creates a new job with a specified country and assigns it to a list of vendors.
-        public async Task<JobDto?> CreateJobAsync(CreateJobDto dto, int leaderUserId)
+        // NEW: Creates vendor details and initiates the verification link process (Requirement 1)
+        public async Task<VendorDto> CreateVendorAsync(CreateVendorDto dto, int leaderUserId)
         {
-            // Find the vendors based on the provided IDs and country.
-            var vendors = await _context.Vendors
-                .Where(v => dto.VendorIds.Contains(v.Id) && v.Country == dto.CountryCode)
-                .ToListAsync();
-
-            if (!vendors.Any())
+            var vendor = new Vendor
             {
-                return null; // Return null if no valid vendors were found for the country.
+                CompanyName = dto.CompanyName,
+                ContactEmail = dto.ContactEmail,
+                Country = dto.Country,
+                Status = "Pending Verification",
+                VerificationToken = Guid.NewGuid(),
+                TokenExpiry = DateTime.UtcNow.AddHours(24),
+                AddedByLeaderId = leaderUserId,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            _context.Vendors.Add(vendor);
+            await _context.SaveChangesAsync();
+
+            await _emailService.SendVerificationEmail(vendor.ContactEmail, vendor.VerificationToken.Value);
+
+            return new VendorDto(vendor.Id, vendor.CompanyName, vendor.ContactEmail, vendor.Status, vendor.CreatedAt, vendor.AddedByLeaderId);
+        }
+
+        // NEW: Vendor uses the link to Accept or Reject the entered details (Requirement 1)
+        public async Task<bool> VerifyVendorAsync(Guid verificationToken, bool accept)
+        {
+            var vendor = await _context.Vendors.FirstOrDefaultAsync(v =>
+                v.VerificationToken == verificationToken &&
+                v.TokenExpiry > DateTime.UtcNow
+            );
+
+            if (vendor == null) return false;
+
+            if (accept)
+            {
+                vendor.Status = "Verified";
+            }
+            else
+            {
+                vendor.Status = "Rejected by Vendor";
             }
 
-            // Create the new job entity.
+            vendor.VerificationToken = null;
+            vendor.TokenExpiry = null;
+            vendor.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        // NEW: Creates a new job and assigns vendors (Requirement 3, 5)
+        public async Task<JobDto?> CreateJobAsync(CreateJobDto dto, int leaderUserId)
+        {
+            var vendors = await _context.Vendors
+                .Where(v => dto.VendorIds.Contains(v.Id) && v.Country == dto.CountryCode && v.Status == "Verified")
+                .ToListAsync();
+
+            if (!vendors.Any()) return null;
+
             var job = new Job
             {
                 Title = dto.Title,
@@ -42,10 +95,10 @@ namespace backend.Services
                 Country = dto.CountryCode,
                 ExpiryDate = dto.ExpiryDate,
                 CreatedByLeaderId = leaderUserId,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true
             };
 
-            // Create the many-to-many relationship entries.
             foreach (var vendor in vendors)
             {
                 job.VendorAssignments.Add(new JobVendor { Vendor = vendor });
@@ -54,39 +107,57 @@ namespace backend.Services
             _context.Jobs.Add(job);
             await _context.SaveChangesAsync();
 
-            // Return the newly created job as a DTO.
-            return new JobDto(job.Id, job.Title, job.Description, job.CreatedAt, job.ExpiryDate);
+            double daysRemaining = (job.ExpiryDate - DateTime.UtcNow).TotalDays;
+
+            // FIX 1: Now passes 6 arguments to JobDto
+            return new JobDto(job.Id, job.Title, job.Description, job.CreatedAt, job.ExpiryDate, daysRemaining);
         }
 
-        // New: Retrieves all jobs created by a leader.
+        // Retrieves all jobs created by a leader (Requirement 4)
         public async Task<IEnumerable<JobDto>> GetJobsAsync(int leaderUserId)
         {
+            // Calculate days remaining for notification/display
             return await _context.Jobs
                 .Where(j => j.CreatedByLeaderId == leaderUserId)
-                .Select(j => new JobDto(j.Id, j.Title, j.Description, j.CreatedAt, j.ExpiryDate))
+                .Select(j => new JobDto(
+                    j.Id,
+                    j.Title,
+                    j.Description,
+                    j.CreatedAt,
+                    j.ExpiryDate,
+                    // FIX 2: Passes 6 arguments to JobDto in the Select statement
+                    (j.ExpiryDate - DateTime.UtcNow).TotalDays // Days/time remaining calculation
+                ))
                 .ToListAsync();
         }
 
-        // New: Retrieves a single job by its ID.
+        // NEW: Retrieves a single job by its ID.
         public async Task<JobDto?> GetJobByIdAsync(int jobId)
         {
             return await _context.Jobs
-                .Where(j => j.Id == jobId)
-                .Select(j => new JobDto(j.Id, j.Title, j.Description, j.CreatedAt, j.ExpiryDate))
-                .FirstOrDefaultAsync();
+               .Where(j => j.Id == jobId)
+               .Select(j => new JobDto(
+                   j.Id,
+                   j.Title,
+                   j.Description,
+                   j.CreatedAt,
+                   j.ExpiryDate,
+                   // FIX 3: Passes 6 arguments to JobDto in the Select statement
+                   (j.ExpiryDate - DateTime.UtcNow).TotalDays
+               ))
+               .FirstOrDefaultAsync();
         }
 
-        // New: Retrieves all employees for a specific job ID.
+        // Retrieves all employees for a specific job ID (Requirement 4: Who got assigned)
         public async Task<IEnumerable<EmployeeDto>> GetJobEmployeesAsync(int jobId)
         {
-            // Use the Employee model's JobId foreign key to query.
             return await _context.Employees
                 .Where(e => e.JobId == jobId)
                 .Select(e => new EmployeeDto(e.Id, e.FirstName, e.LastName, e.JobTitle))
                 .ToListAsync();
         }
 
-        // New: Retrieves all vendors from a specific country.
+        // Retrieves all vendors from a specific country (Requirement 5)
         public async Task<IEnumerable<VendorDto>?> GetVendorsByCountryAsync(string countryCode)
         {
             var vendors = await _context.Vendors
@@ -96,17 +167,5 @@ namespace backend.Services
 
             return vendors.Any() ? vendors : null;
         }
-
-        // You'll need to define the following DTOs for the new methods to work.
-
-        // public record JobDto(int Id, string Title, string Description, DateTime CreatedAt, DateTime ExpiryDate);
-        // public class CreateJobDto
-        // {
-        //     public string Title { get; set; }
-        //     public string Description { get; set; }
-        //     public string CountryCode { get; set; }
-        //     public DateTime ExpiryDate { get; set; }
-        //     public List<int> VendorIds { get; set; }
-        // }
     }
 }
