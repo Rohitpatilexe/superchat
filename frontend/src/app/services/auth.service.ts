@@ -12,17 +12,25 @@ export class AuthService {
 
   constructor(private http: HttpClient) {}
 
-  login(data: { email: string; password: string }): Observable<{ token: string }> {
-    return this.http.post<{ token: string }>(`${this.apiUrl}/login`, data);
-  }
+  //added parameter for captcha
+
+  login(data: { email: string; password: string; captchaToken: string }): Observable<{ token: string }> {
+  return this.http.post<{ token: string }>(`${this.apiUrl}/login`, data);
+}
 
   /**
    * THE FIX: This method was missing and has been added back.
    * It allows a new vendor to set their password.
    */
-  setupVendor(token: string, password: string): Observable<any> {
-    return this.http.post(`${this.apiUrl}/setup-vendor/${token}`, { password });
-  }
+
+   //added parameter for captcha
+ setupVendor(token: string, password: string, captchaToken: string): Observable<any> {
+  return this.http.post(`${this.apiUrl}/setup-vendor/${token}`, {
+    password,
+    captchaToken
+  });
+}
+
 
   logout(): void {
     localStorage.removeItem('token');
