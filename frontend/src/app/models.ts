@@ -51,3 +51,24 @@ export interface JobDetail extends Job {
   assignedVendors: Vendor[];
   submittedEmployees: EmployeeWithVendor[];
 }
+
+// --- Messaging Models ---
+
+// Represents a single message in a conversation
+export interface MessageDto {
+  id: number;
+  content: string;
+  sentAt: string; // ISO date string
+  senderPublicId: string;
+  senderName: string;
+}
+
+// Represents a conversation in a list (for an inbox view)
+export interface ConversationDto {
+  conversationPublicId: string;
+  jobTitle: string;
+  participantPublicId: string;
+  participantName: string;
+  lastMessage?: string;
+  lastMessageTimestamp?: string; // ISO date string
+}

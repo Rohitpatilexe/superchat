@@ -1,9 +1,8 @@
-// src/app/pages/layout.component.ts
-
-import { Component } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterModule } from '@angular/router';
 import { AuthService } from '../services/auth.service';
+import { MessagingService } from '../services/messaging.service';
 
 @Component({
   standalone: true,
@@ -24,10 +23,12 @@ import { AuthService } from '../services/auth.service';
             <a routerLink="/leadership/dashboard" routerLinkActive="bg-blue-100 text-blue-700" class="block py-2 px-4 text-gray-700 hover:bg-gray-200">Dashboard</a>
             <a routerLink="/leadership/vendors" routerLinkActive="bg-blue-100 text-blue-700" class="block py-2 px-4 text-gray-700 hover:bg-gray-200">Manage Vendors</a>
             <a routerLink="/leadership/jobs" routerLinkActive="bg-blue-100 text-blue-700" class="block py-2 px-4 text-gray-700 hover:bg-gray-200">Manage Jobs</a>
+            <a routerLink="/leadership/conversations" routerLinkActive="bg-blue-100 text-blue-700" class="block py-2 px-4 text-gray-700 hover:bg-gray-200">Conversations</a>
           </ng-container>
           <ng-container *ngIf="userRole === 'Vendor'">
             <a routerLink="/vendor/dashboard" routerLinkActive="bg-blue-100 text-blue-700" class="block py-2 px-4 text-gray-700 hover:bg-gray-200">Dashboard</a>
             <a routerLink="/vendor/jobs" routerLinkActive="bg-blue-100 text-blue-700" class="block py-2 px-4 text-gray-700 hover:bg-gray-200">My Assigned Jobs</a>
+            <a routerLink="/vendor/conversations" routerLinkActive="bg-blue-100 text-blue-700" class="block py-2 px-4 text-gray-700 hover:bg-gray-200">Conversations</a>
           </ng-container>
         </nav>
         <div class="absolute bottom-0 w-64 p-4 border-t">
@@ -40,14 +41,24 @@ import { AuthService } from '../services/auth.service';
     </div>
   `,
 })
-export class LayoutComponent {
-  // This property must be a single string for the template's *ngIf checks.
+export class LayoutComponent implements OnInit, OnDestroy {
   userRole: string | null;
 
-  constructor(private authService: AuthService, private router: Router) {
-    // THE FIX: Process the value from the service before assigning it.
+  constructor(
+    private authService: AuthService,
+    private router: Router,
+    private messagingService: MessagingService
+  ) {
     const roles = this.authService.getUserRole();
     this.userRole = Array.isArray(roles) ? roles[0] : roles;
+  }
+
+  ngOnInit(): void {
+    this.messagingService.startConnection();
+  }
+
+  ngOnDestroy(): void {
+    this.messagingService.stopConnection();
   }
 
   logout() {

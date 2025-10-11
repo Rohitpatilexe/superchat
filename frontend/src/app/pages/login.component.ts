@@ -1,5 +1,5 @@
 // src/app/pages/login.component.ts
-
+import { MessagingService } from '../services/messaging.service';
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
@@ -37,7 +37,7 @@ export class LoginComponent {
   errorMessage = '';
   isSubmitting = false;
 
-  constructor(private fb: FormBuilder, private authService: AuthService, private router: Router) {
+  constructor(private fb: FormBuilder, private authService: AuthService, private router: Router, private messagingService: MessagingService) {
     this.loginForm = this.fb.group({
       email: ['', [Validators.required, Validators.email]],
       password: ['', Validators.required]
@@ -52,8 +52,8 @@ export class LoginComponent {
     this.authService.login(this.loginForm.value as any).subscribe({
       next: (res) => {
         localStorage.setItem('token', res.token);
+        this.messagingService.startConnection();
         const roles = this.authService.getUserRole();
-        
         // Determine the primary role for navigation
         const primaryRole = Array.isArray(roles) ? roles[0] : roles;
         

@@ -9,6 +9,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Microsoft.OpenApi.Models;
+using backend.Hubs;
+using AspNetCoreRateLimit;
 
 if (Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") != "true")
 {
@@ -17,7 +19,17 @@ if (Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") != "true")
 
 var builder = WebApplication.CreateBuilder(args);
 
-// --- CORS policy name ---
+builder.Services.AddMemoryCache(); // for rate limiting
+
+builder.Services.Configure<IpRateLimitOptions>(builder.Configuration.GetSection("IpRateLimiting"));
+
+builder.Services.AddSingleton<IIpPolicyStore, MemoryCacheIpPolicyStore>();
+builder.Services.AddSingleton<IRateLimitCounterStore, MemoryCacheRateLimitCounterStore>();
+builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
+builder.Services.AddSingleton<IProcessingStrategy, AsyncKeyLockProcessingStrategy>();
+builder.Services.AddInMemoryRateLimiting();
+
+// CORS policy name
 var MyAllowSpecificOrigins = "_myAllowSpecificOrigins";
 
 var dbHost = Environment.GetEnvironmentVariable("DB_HOST");
@@ -44,6 +56,8 @@ builder.Services.AddScoped<LeadershipService>();
 builder.Services.AddScoped<AdminService>();
 builder.Services.AddScoped<EmailService>();
 builder.Services.AddScoped<VendorService>();
+builder.Services.AddScoped<MessagingService>();
+builder.Services.AddSignalR();
 
 // Configuring the AWS S3
 var awsCredentials = new BasicAWSCredentials(
@@ -64,6 +78,21 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
+    // for SignalR
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/chatHub"))
+            {
+                context.Token = accessToken;
+            }
+            return Task.CompletedTask;
+        }
+    };
+    // for REST API
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuer = true,
@@ -85,7 +114,8 @@ builder.Services.AddCors(options =>
                           // For production, you would replace this with your actual frontend domain.
                           policy.WithOrigins("http://localhost:4200")
                                 .AllowAnyHeader()
-                                .AllowAnyMethod();
+                                .AllowAnyMethod()
+                                .AllowCredentials();
                       });
 });
 
@@ -126,6 +156,8 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
+app.UseIpRateLimiting(); // rate limiting must be the first middleware
+
 if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
@@ -147,5 +179,5 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers(); // Needed to map controller routes
-
+app.MapHub<ChatHub>("/chatHub");
 app.Run();

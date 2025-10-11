@@ -13,6 +13,8 @@ namespace backend.Config
         public DbSet<Employee> Employees { get; set; }
         public DbSet<Job> Jobs { get; set; }
         public DbSet<JobVendor> JobVendors { get; set; }
+        public DbSet<Conversation> Conversations { get; set; }
+        public DbSet<Message> Messages { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -88,12 +90,59 @@ namespace backend.Config
                 .WithMany()
                 .HasForeignKey(e => e.CreatedByUserId)
                 .OnDelete(DeleteBehavior.Restrict);
+            
+            // --- NEW: MESSAGING RELATIONSHIPS ---
+            // This new section defines all the rules for your messaging tables.
+
+            // Conversation -> Job (Many-to-One)
+            // A Job can have many conversations, but a conversation belongs to only one job.
+            // If a Job is deleted, all related conversations are also deleted.
+            modelBuilder.Entity<Conversation>()
+                .HasOne(c => c.Job)
+                .WithMany() // Assuming a Job doesn't need a direct navigation property back to Conversation
+                .HasForeignKey(c => c.JobId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Conversation -> Vendor (Many-to-One)
+            // A Vendor can be in many conversations, but a conversation has only one vendor.
+            // We restrict delete to prevent accidentally removing a vendor who is in active conversations.
+            modelBuilder.Entity<Conversation>()
+                .HasOne(c => c.Vendor)
+                .WithMany()
+                .HasForeignKey(c => c.VendorId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Conversation -> User (Leader) (Many-to-One)
+            // A Leader (User) can have many conversations, but a conversation has only one leader.
+            modelBuilder.Entity<Conversation>()
+                .HasOne(c => c.Leader)
+                .WithMany()
+                .HasForeignKey(c => c.LeaderId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Message -> Conversation (Many-to-One)
+            // A Conversation has many messages. Deleting a conversation deletes all its messages.
+            modelBuilder.Entity<Message>()
+                .HasOne(m => m.Conversation)
+                .WithMany(c => c.Messages)
+                .HasForeignKey(m => m.ConversationId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Message -> User (Sender) (Many-to-One)
+            // A User can send many messages. We restrict deletion of users who have sent messages.
+            modelBuilder.Entity<Message>()
+                .HasOne(m => m.Sender)
+                .WithMany()
+                .HasForeignKey(m => m.SenderId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             // --- UNIQUE INDEXES ---
             modelBuilder.Entity<User>().HasIndex(u => u.PublicId).IsUnique();
             modelBuilder.Entity<Vendor>().HasIndex(v => v.PublicId).IsUnique();
             modelBuilder.Entity<Job>().HasIndex(j => j.PublicId).IsUnique();
             modelBuilder.Entity<Employee>().HasIndex(e => e.PublicId).IsUnique();
+            // Add a unique index for the conversation's PublicId.
+            modelBuilder.Entity<Conversation>().HasIndex(c => c.PublicId).IsUnique();
         }
     }
 }

@@ -1,8 +1,10 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
-import { ActivatedRoute, RouterModule } from '@angular/router'; // 1. RouterModule must be imported
+import { ActivatedRoute, RouterModule } from '@angular/router';
 import { LeadershipService } from '../../services/leadership.service';
-import { JobDetail, EmployeeWithVendor } from '../../models';
+import { JobDetail, EmployeeWithVendor, Vendor, ConversationDto } from '../../models';
+import { MessagingService } from '../../services/messaging.service';
+import { ChatModalComponent } from '../chat-modal.component';
 
 // This interface helps in organizing the data for the template
 interface VendorEmployeeGroup {
@@ -12,7 +14,7 @@ interface VendorEmployeeGroup {
 
 @Component({
   standalone: true,
-  imports: [CommonModule, DatePipe, RouterModule], // 2. RouterModule must be in the imports array
+  imports: [CommonModule, DatePipe, RouterModule, ChatModalComponent],
   template: `
     <div class="bg-gray-50 min-h-screen py-12 px-4 sm:px-6 lg:px-8">
       <div *ngIf="job" class="bg-white rounded-3xl shadow-2xl border border-gray-100 max-w-5xl mx-auto">
@@ -131,7 +133,10 @@ interface VendorEmployeeGroup {
         </p>
         <p class="mt-2 text-gray-600">The requested job details could not be found or loaded.</p>
       </div>
-
+      <app-chat-modal *ngIf="selectedConversation" 
+                    [conversation]="selectedConversation" 
+                    (closeModal)="closeChat()">
+      </app-chat-modal>
     </div>
   `
 })
@@ -139,10 +144,12 @@ export class JobDetailComponent implements OnInit {
   job: JobDetail | null = null;
   isLoading = true;
   employeesByVendor: VendorEmployeeGroup[] = [];
+  selectedConversation: ConversationDto | null = null;
 
   constructor(
     private route: ActivatedRoute,
-    private leadershipService: LeadershipService
+    private leadershipService: LeadershipService,
+    private messagingService: MessagingService
   ) {}
 
   ngOnInit() {
@@ -178,5 +185,21 @@ export class JobDetailComponent implements OnInit {
       vendorName,
       employees
     }));
+  }
+
+  openChatWithVendor(vendor: Vendor): void {
+    if (!this.job) return;
+    this.messagingService.startConversation(this.job.publicId, vendor.publicId).subscribe(response => {
+      this.selectedConversation = {
+        conversationPublicId: response.conversationPublicId,
+        jobTitle: this.job?.title || '',
+        participantPublicId: vendor.publicId,
+        participantName: vendor.companyName
+      };
+    });
+  }
+
+  closeChat(): void {
+    this.selectedConversation = null;
   }
 }
